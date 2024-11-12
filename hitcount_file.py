@@ -1,12 +1,13 @@
-from hashlib import md5
+from hashlib import blake2s as hash
 from io import BufferedRandom
 import fcntl
 import json
 import pickle
 from shutil import copyfile
+from os import getenv
 
 COUNT_SIZE = 4
-VISITOR_SIZE = md5().digest_size
+VISITOR_SIZE = hash().digest_size
 
 COUNT_OFFSET = 0
 UNIQUE_COUNT_OFFSET = COUNT_OFFSET + COUNT_SIZE
@@ -25,7 +26,7 @@ class HitCountFile:
 
             fcntl.flock(self.file, fcntl.LOCK_EX)
 
-            self.count = 0
+            self.count = int(getenv("INITIAL_COUNT") or 0)
             self.unique = 0
             return
         except FileExistsError:
@@ -76,7 +77,7 @@ class HitCountJson(HitCountFile):
 
             fcntl.flock(self.file, fcntl.LOCK_EX)
 
-            self.count = 0
+            self.count = int(getenv("INITIAL_COUNT") or 0)
             self.unique = 0
             return
         except FileExistsError:
@@ -90,7 +91,7 @@ class HitCountJson(HitCountFile):
         try:
             data = json.load(self.file)
         except json.JSONDecodeError:
-            self.count = 0
+            self.count = int(getenv("INITIAL_COUNT") or 0)
             self.unique = 0
             copyfile(fileName, fileName + ".err")
             return
@@ -101,7 +102,7 @@ class HitCountJson(HitCountFile):
 
     def NewVisitor(self, visitor: str):
         self.count += 1
-        visitorHash = md5(visitor.encode()).hexdigest()
+        visitorHash = hash(visitor.encode()).hexdigest()
         if visitorHash in self.visitors:
             return True
         self.unique += 1
@@ -122,7 +123,7 @@ class HitCountJson(HitCountFile):
 
 
 class HitCountPickle(HitCountFile):
-    visitors: set[str] = set()
+    visitors: set[bytes] = set()
 
     def PostInit(self):
         try:
@@ -137,7 +138,7 @@ class HitCountPickle(HitCountFile):
     def NewVisitor(self, visitor: str):
         self.count += 1
 
-        visitorHash = md5(visitor.encode()).digest()
+        visitorHash = hash(visitor.encode()).digest()
         if visitorHash in self.visitors:
             return True
         self.unique += 1
@@ -186,7 +187,7 @@ class HitCountBinary(HitCountFile):
         self.count += 1
 
         self.file.seek(VISITORS_ARRAY_OFFSET)
-        visitorHash = md5(visitor.encode()).digest()
+        visitorHash = hash(visitor.encode()).digest()
         while True:
             read = self.file.read(VISITOR_SIZE)
             if read == b"":
