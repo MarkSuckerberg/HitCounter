@@ -1,4 +1,4 @@
-from simple import app
+from routes import app
 from dotenv import load_dotenv
 
 if __name__ == "__main__":
