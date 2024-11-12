@@ -1,12 +1,7 @@
 from hitcount_file import HitCountJson, HitCountBinary, HitCountPickle
 from random import randint
 from pyperf import Runner
-from routes import (
-    GenerateAnimated,
-    GenerateTicker,
-    GenerateTickerUnique,
-    app,
-)
+from routes import GenerateAnimated, GenerateTicker, GenerateTickerUnique
 import hashlib
 
 
@@ -54,10 +49,6 @@ def Blake(digest: int, salt: int = 0):
 
 if __name__ == "__main__":
     runner = Runner()
-    with app.test_client() as client:
-        runner.bench_func("Unique Count", client.get, "/unique/ticker.webp")
-        runner.bench_func("Current Count", client.get, "/ticker.webp")
-
     runner.bench_func("Ticker", GenerateTicker, randint(1, 1000000))
     runner.bench_func(
         "Ticker with Unique",
