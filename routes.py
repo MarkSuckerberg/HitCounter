@@ -3,6 +3,7 @@ from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
 from hitcount_file import HitCountBinary as HitCountFile
 from typing import Optional
+from hashlib import blake2s
 
 app = Flask(__name__)
 
@@ -13,20 +14,23 @@ def index():
 
 
 def GetAndUpdateUnique(visitor: str) -> tuple[int, int]:
-    with HitCountFile("data/hitcount.dat") as data:
+    host = blake2s((request.origin or "").encode()).hexdigest()
+    with HitCountFile(f"data/{host}.dat") as data:
         data.NewVisitor(visitor)
         return (data.count, data.unique)
 
 
-def GetAndUpdateCount():
-    with HitCountFile("data/hitcount.dat") as data:
+def GetAndUpdateCount() -> int:
+    host = blake2s((request.origin or "").encode()).hexdigest()
+    with HitCountFile(f"data/{host}.dat") as data:
         data.count += 1
         return data.count
 
 
-@app.route("/data.json")
+@app.route("/<domain>/data.json")
 def data():
-    with HitCountFile("data/hitcount.dat") as data:
+    host = blake2s((request.origin or "").encode()).hexdigest()
+    with HitCountFile(f"data/{host}.dat") as data:
         return {
             "Count": data.count,
             "Unique": data.unique,
