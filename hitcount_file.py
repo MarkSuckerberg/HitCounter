@@ -32,13 +32,16 @@ class HitCountFile:
         self.PostInit()
 
     def Defaults(self):
+        """Sets the default values for the file."""
         self.count = int(getenv("INITIAL_COUNT") or 0)
         self.unique = int(getenv("INITIAL_UNIQUE_COUNT") or 0)
 
     def PostInit(self):
+        """Called after the file is successfully loaded. Override this to load the data."""
         pass
 
     def Close(self):
+        """Closes the file and releases the lock. Do not override this, override PreClose instead."""
         self.PreClose()
 
         # Release the lock
@@ -47,13 +50,16 @@ class HitCountFile:
         # Close the file
         self.file.close()
 
-    def NewVisitor(self, visitor: str):
-        pass
+    def NewVisitor(self, visitor: str) -> bool:
+        """Adds a new visitor to the file. Returns True if the visitor already exists."""
+        return True
 
-    def GetVisitors(self):
-        pass
+    def GetVisitors(self) -> set[bytes]:
+        """Returns the full set of visitors stored in the file."""
+        return set()
 
     def PreClose(self):
+        """Called before the file is closed. Override this to save the data."""
         pass
 
     def __enter__(self):
@@ -83,13 +89,17 @@ class HitCountJson(HitCountFile):
         # Open the file for reading
         self.file = open(fileName, "r+")
 
+        self.PostInit()
+
+    def PostInit(self):
+
         fcntl.flock(self.file, fcntl.LOCK_EX)
 
         try:
             data = json.load(self.file)
         except json.JSONDecodeError:
             self.Defaults()
-            copyfile(fileName, fileName + ".err")
+            copyfile(self.file.name, self.file.name + ".err")
             return
 
         self.count = data["count"]
@@ -105,7 +115,10 @@ class HitCountJson(HitCountFile):
         self.visitors.add(visitorHash)
 
     def GetVisitors(self):
-        return self.visitors
+        bytesVisitor = []
+        for visitor in self.visitors:
+            bytesVisitor.append(bytes.fromhex(visitor))
+        return bytesVisitor
 
     def PreClose(self):
         data = {
@@ -125,6 +138,8 @@ class HitCountPickle(HitCountFile):
         try:
             data = pickle.load(self.file)
         except pickle.UnpicklingError:
+            self.Defaults()
+            copyfile(self.file.name, self.file.name + ".err")
             return
 
         self.count = data["count"]
@@ -161,31 +176,77 @@ VISITOR_SIZE = hash().digest_size
 
 COUNT_OFFSET = 0
 UNIQUE_COUNT_OFFSET = COUNT_OFFSET + COUNT_SIZE
-VISITORS_ARRAY_OFFSET = UNIQUE_COUNT_OFFSET + COUNT_SIZE
+VERSION_OFFSET = UNIQUE_COUNT_OFFSET + COUNT_SIZE
+
+# Leave padding for further data to be added
+VISITORS_ARRAY_OFFSET = VISITOR_SIZE
+
+# Don't somehow accidentally overlap the data
+assert VISITORS_ARRAY_OFFSET > (VERSION_OFFSET + COUNT_SIZE)
+
+CURRENT_VERSION = 1
 
 
 class HitCountBinary(HitCountFile):
+    version: int
+
     def PostInit(self):
         # Read the initial values
         self.count = int.from_bytes(self.file.read(COUNT_SIZE))
         self.unique = int.from_bytes(self.file.read(COUNT_SIZE))
+        self.version = int.from_bytes(self.file.read(COUNT_SIZE))
+
+        if not self.HandleUpdate(self.version):
+            copyfile(self.file.name, self.file.name + ".err")
+            self.Defaults()
+
+    def HandleUpdate(self, version: int):
+        """Handles updating the file to the current version. Returns True if the file was successfully updated."""
+        if version == CURRENT_VERSION:
+            return True
+
+        copyfile(self.file.name, f"{self.file.name}.{version}.bak")
+
+        # Pre-version 1, it might be 0 or the first part of the first visitor
+        if version == 0 or version > CURRENT_VERSION:
+            self.version = 1
+            self.file.seek(VERSION_OFFSET)
+            visitors = self.GetVisitors(False)
+
+            self.file.seek(VISITORS_ARRAY_OFFSET)
+            for visitor in visitors:
+                self.file.write(visitor)
+
+            self.file.seek(VERSION_OFFSET)
+            self.file.write(CURRENT_VERSION.to_bytes(COUNT_SIZE))
+            self.file.write(
+                b"\x00" * (VISITORS_ARRAY_OFFSET - VERSION_OFFSET - COUNT_SIZE)
+            )
+
+            return True
+
+        return False
 
     def PreClose(self):
         # Move to the start of the file
-        self.file.seek(0)
+        self.file.seek(COUNT_OFFSET)
 
         # Write the count and unique count
         self.file.write(self.count.to_bytes(COUNT_SIZE))
         self.file.write(self.unique.to_bytes(COUNT_SIZE))
+        self.file.write(CURRENT_VERSION.to_bytes(COUNT_SIZE))
 
-    def GetVisitors(self):
-        visitors = []
+    def GetVisitors(self, seek=True):
+        if seek:
+            self.file.seek(VISITORS_ARRAY_OFFSET)
+
+        visitors = set()
         while True:
             read = self.file.read(VISITOR_SIZE)
             if read == b"":
                 return visitors
 
-            visitors.append(read.hex())
+            visitors.add(read)
 
     def NewVisitor(self, visitor: str):
         self.count += 1
@@ -196,10 +257,29 @@ class HitCountBinary(HitCountFile):
             read = self.file.read(VISITOR_SIZE)
             if read == b"":
                 arraySize = self.file.tell() - VISITORS_ARRAY_OFFSET
+
+                # Add padding if necessary
                 if arraySize % VISITOR_SIZE != 0:
                     self.file.write((arraySize % VISITOR_SIZE) * b"\x00")
+
                 self.file.write(visitorHash)
                 self.unique += 1
                 return False
             if read == visitorHash:
                 return True
+
+
+class HitCountBinarySimple(HitCountFile):
+    """A simpler and faster version that just stores hits. Compatible with the normal version."""
+    unique: None
+
+    def PostInit(self):
+        # Read the initial values
+        self.count = int.from_bytes(self.file.read(COUNT_SIZE))
+
+    def PreClose(self):
+        # Move to the start of the file
+        self.file.seek(COUNT_OFFSET)
+
+        # Write the count and unique count
+        self.file.write(self.count.to_bytes(COUNT_SIZE))

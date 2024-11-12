@@ -1,7 +1,7 @@
 from flask import Flask, send_file, request, redirect, url_for, render_template
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
-from hitcount_file import HitCountBinary as HitCountFile
+from hitcount_file import HitCountBinary, HitCountBinarySimple
 from typing import Optional, Literal, get_args
 
 app = Flask(__name__)
@@ -15,20 +15,20 @@ def index():
 
 
 def GetAndUpdateUnique(visitor: str) -> tuple[int, int]:
-    with HitCountFile("data/hitcount.dat") as data:
+    with HitCountBinary("data/hitcount.dat") as data:
         data.NewVisitor(visitor)
         return (data.count, data.unique)
 
 
 def GetAndUpdateCount():
-    with HitCountFile("data/hitcount.dat") as data:
+    with HitCountBinarySimple("data/hitcount.dat") as data:
         data.count += 1
         return data.count
 
 
 @app.route("/data.json")
 def data():
-    with HitCountFile("data/hitcount.dat") as data:
+    with HitCountBinary("data/hitcount.dat") as data:
         return {
             "Count": data.count,
             "Unique": data.unique,
@@ -74,24 +74,26 @@ def UniqueCount(ext: FileType = "webp"):
 
 @app.route("/counter")
 @app.route("/counter.<ext>")
-def CurrentCount():
+def CurrentCount(ext: FileType = "webp"):
     count = GetAndUpdateCount()
 
-    return redirect(url_for(counter.__name__, count=count))
+    return redirect(url_for(counter.__name__, count=count, ext=ext))
 
 
-@app.route("/unique/ticker.webp")
-def UniqueTicker():
+@app.route("/unique/ticker")
+@app.route("/unique/ticker.<ext>")
+def UniqueTicker(ext: FileType = "webp"):
     count, unique = GetAndUpdateUnique(request.remote_addr)
 
-    return redirect(url_for(ticker.__name__, count=count, unique=unique))
+    return redirect(url_for(ticker.__name__, count=count, unique=unique, ext=ext))
 
 
-@app.route("/ticker.webp")
-def CurrentTicker():
+@app.route("/ticker")
+@app.route("/ticker.<ext>")
+def CurrentTicker(ext: FileType = "webp"):
     count = GetAndUpdateCount()
 
-    return redirect(url_for(ticker.__name__, count=count))
+    return redirect(url_for(ticker.__name__, count=count, ext=ext))
 
 
 def GenerateAnimated(count: int, fileType: FileType = "webp") -> BytesIO:
