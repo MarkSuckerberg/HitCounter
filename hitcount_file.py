@@ -1,17 +1,10 @@
 from hashlib import blake2s as hash
-from io import BufferedRandom
+from io import BufferedRandom, TextIOWrapper
 import fcntl
 import json
 import pickle
 from shutil import copyfile
 from os import getenv
-
-COUNT_SIZE = 4
-VISITOR_SIZE = hash().digest_size
-
-COUNT_OFFSET = 0
-UNIQUE_COUNT_OFFSET = COUNT_OFFSET + COUNT_SIZE
-VISITORS_ARRAY_OFFSET = UNIQUE_COUNT_OFFSET + COUNT_SIZE
 
 
 class HitCountFile:
@@ -26,8 +19,7 @@ class HitCountFile:
 
             fcntl.flock(self.file, fcntl.LOCK_EX)
 
-            self.count = int(getenv("INITIAL_COUNT") or 0)
-            self.unique = 0
+            self.Defaults()
             return
         except FileExistsError:
             pass
@@ -38,6 +30,10 @@ class HitCountFile:
         fcntl.flock(self.file, fcntl.LOCK_EX)
 
         self.PostInit()
+
+    def Defaults(self):
+        self.count = int(getenv("INITIAL_COUNT") or 0)
+        self.unique = int(getenv("INITIAL_UNIQUE_COUNT") or 0)
 
     def PostInit(self):
         pass
@@ -68,7 +64,8 @@ class HitCountFile:
 
 
 class HitCountJson(HitCountFile):
-    visitors: set[str] = set()
+    visitors: set[str]
+    file: TextIOWrapper
 
     def __init__(self, fileName):
         try:
@@ -77,8 +74,8 @@ class HitCountJson(HitCountFile):
 
             fcntl.flock(self.file, fcntl.LOCK_EX)
 
-            self.count = int(getenv("INITIAL_COUNT") or 0)
-            self.unique = 0
+            self.Defaults()
+            self.visitors = set()
             return
         except FileExistsError:
             pass
@@ -91,8 +88,7 @@ class HitCountJson(HitCountFile):
         try:
             data = json.load(self.file)
         except json.JSONDecodeError:
-            self.count = int(getenv("INITIAL_COUNT") or 0)
-            self.unique = 0
+            self.Defaults()
             copyfile(fileName, fileName + ".err")
             return
 
@@ -158,6 +154,14 @@ class HitCountPickle(HitCountFile):
         self.file.truncate(0)
 
         pickle.dump(data, self.file)
+
+
+COUNT_SIZE = 4
+VISITOR_SIZE = hash().digest_size
+
+COUNT_OFFSET = 0
+UNIQUE_COUNT_OFFSET = COUNT_OFFSET + COUNT_SIZE
+VISITORS_ARRAY_OFFSET = UNIQUE_COUNT_OFFSET + COUNT_SIZE
 
 
 class HitCountBinary(HitCountFile):
