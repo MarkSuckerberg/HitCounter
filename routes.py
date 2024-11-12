@@ -2,14 +2,16 @@ from flask import Flask, send_file, request, redirect, url_for, render_template
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
 from hitcount_file import HitCountBinary as HitCountFile
-from typing import Optional
+from typing import Optional, Literal, get_args
 
 app = Flask(__name__)
+
+FileType = Literal["webp", "gif", "png"]
 
 
 @app.route("/")
 def index():
-    return render_template("base.html")
+    return render_template("base.html.j2")
 
 
 def GetAndUpdateUnique(visitor: str) -> tuple[int, int]:
@@ -35,33 +37,43 @@ def data():
 
 @app.route("/count/<int:count>.webp")
 @app.route("/count/<int:count>-<int:unique>.webp")
-def counter(count: int, unique: Optional[int] = None):
+def counter(count: int, unique: Optional[int] = None, ext: FileType = "webp"):
+    if ext not in get_args(FileType):
+        return "Invalid file type", 400
+
     if unique:
-        image = GenerateTickerUnique(count, unique)
+        image = GenerateTickerUnique(count, unique, ext)
     else:
-        image = GenerateTicker(count)
+        image = GenerateTicker(count, ext)
 
-    return send_file(image, "image/webp")
+    return send_file(image, f"image/{ext}")
 
 
-@app.route("/ticker/<int:count>.webp")
-@app.route("/count/<int:count>-<int:unique>.webp")
-def ticker(count: int, unique: Optional[int] = None):
+@app.route("/ticker/<int:count>")
+@app.route("/ticker/<int:count>.<ext>")
+@app.route("/ticker/<int:count>-<int:unique>")
+@app.route("/ticker/<int:count>-<int:unique>.<ext>")
+def ticker(count: int, unique: Optional[int] = None, ext: FileType = "webp"):
+    if ext not in get_args(FileType):
+        return "Invalid file type", 400
+
     if unique:
-        image = GenerateTickerUnique(count, unique)
+        image = GenerateTickerUnique(count, unique, ext)
     else:
-        image = GenerateAnimated(count)
-    return send_file(image, "image/webp")
+        image = GenerateAnimated(count, ext)
+    return send_file(image, f"image/{ext}")
 
 
-@app.route("/unique/counter.webp")
-def UniqueCount():
+@app.route("/unique/counter")
+@app.route("/unique/counter.<ext>")
+def UniqueCount(ext: FileType = "webp"):
     count, unique = GetAndUpdateUnique(request.remote_addr)
 
-    return redirect(url_for(counter.__name__, count=count, unique=unique))
+    return redirect(url_for(counter.__name__, count=count, unique=unique, ext=ext))
 
 
-@app.route("/counter.webp")
+@app.route("/counter")
+@app.route("/counter.<ext>")
 def CurrentCount():
     count = GetAndUpdateCount()
 
@@ -82,7 +94,7 @@ def CurrentTicker():
     return redirect(url_for(ticker.__name__, count=count))
 
 
-def GenerateAnimated(count: int) -> BytesIO:
+def GenerateAnimated(count: int, fileType: FileType = "webp") -> BytesIO:
     # Loop through all the frames, adding the text to each frame, before stitching them all back together
     generatedFrames: list[Image.Image] = []
 
@@ -103,7 +115,7 @@ def GenerateAnimated(count: int) -> BytesIO:
     output = BytesIO()
     generatedFrames[0].save(
         output,
-        "WEBP",
+        fileType,
         save_all=True,
         append_images=generatedFrames[1:],
         disposal=2,
@@ -115,7 +127,7 @@ def GenerateAnimated(count: int) -> BytesIO:
     return output
 
 
-def GenerateTicker(count: int) -> BytesIO:
+def GenerateTicker(count: int, fileType: FileType = "webp") -> BytesIO:
     with Image.open("bg.png") as bg:
         drawing = ImageDraw.Draw(bg)
         drawing.text(
@@ -124,13 +136,15 @@ def GenerateTicker(count: int) -> BytesIO:
         del drawing
 
         output = BytesIO()
-        bg.save(output, "WEBP", lossless=True)
+        bg.save(output, fileType, lossless=True)
         output.seek(0)
 
         return output
 
 
-def GenerateTickerUnique(count: int, unique: int) -> BytesIO:
+def GenerateTickerUnique(
+    count: int, unique: int, fileType: FileType = "webp"
+) -> BytesIO:
     with Image.open("bg-unique.png") as bg:
         uniqueBg = bg.copy()
         uniqueDrawing = ImageDraw.Draw(uniqueBg)
@@ -148,7 +162,7 @@ def GenerateTickerUnique(count: int, unique: int) -> BytesIO:
         output = BytesIO()
         bg.save(
             output,
-            "WEBP",
+            fileType,
             save_all=True,
             append_images=[uniqueBg],
             disposal=2,
