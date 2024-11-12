@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Hitcounter</title>
+  </head>
+  <body>
+    <h1>Hitcounter Index Page</h1>
+
+    <a href="{{url_for('index', _external=True)}}">
+      <img
+        src="{{ url_for('UniqueTicker', _external=True) }}"
+        alt="A hitcounter in the style of a seven-segment display."
+    /></a>
+
+    <a href="{{url_for('index', _external=True)}}">
+      <img
+        src="{{ url_for('CurrentCount', _external=True) }}"
+        alt="A hitcounter in the style of a seven-segment display."
+    /></a>
+
+    <hr />
+
+    <pre>
+To use the hitcounter, simply add this img tag to your site:
+<code>
+&lt;a href="{{url_for('index', _external=True)}}"&gt;
+    &lt;img src="{{ url_for('UniqueTicker', _external=True) }}" alt="A hitcounter in the style of a seven-segment display." /&gt;
+&lt;/a&gt;
+</code>
+
+Or, if you only want to track all hits, use this instead:
+<code>
+&lt;a href="{{url_for('index', _external=True)}}"&gt;
+    &lt;img src="{{ url_for('CurrentTicker', _external=True) }}" alt="A hitcounter in the style of a seven-segment display." /&gt;
+&lt;/a&gt;
+</code>
+    </pre>
+  </body>
+</html>

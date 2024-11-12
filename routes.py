@@ -1,20 +1,15 @@
 from flask import Flask, send_file, request, redirect, url_for
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
-from hitcount_file import HitCountJson as HitCountFile
+from hitcount_file import HitCountBinary as HitCountFile
+from typing import Optional
 
 app = Flask(__name__)
 
 
 @app.route("/")
 def index():
-    return """<html>
-<body>
-<img src='/counter.webp' style='background-color: black'></img>
-<img src='/ticker.webp' style='background-color: black'></img>
-</body>
-</html>
-"""
+    return render_template("base.html")
 
 
 def GetAndUpdateUnique(visitor: str) -> tuple[int, int]:
