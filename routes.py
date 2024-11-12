@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, redirect
+from flask import Flask, send_file, request, redirect, url_for
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
 from hitcount_file import HitCountJson as HitCountFile
@@ -39,29 +39,52 @@ def data():
 
 
 @app.route("/count/<int:count>.webp")
-def count(count):
-    image = GenerateAnimated(count)
+@app.route("/count/<int:count>-<int:unique>.webp")
+def counter(count: int, unique: Optional[int] = None):
+    if unique:
+        image = GenerateTickerUnique(count, unique)
+    else:
+        image = GenerateTicker(count)
+
     return send_file(image, "image/webp")
 
 
 @app.route("/ticker/<int:count>.webp")
-def ticker(count):
-    image = GenerateTicker(count)
+@app.route("/count/<int:count>-<int:unique>.webp")
+def ticker(count: int, unique: Optional[int] = None):
+    if unique:
+        image = GenerateTickerUnique(count, unique)
+    else:
+        image = GenerateAnimated(count)
     return send_file(image, "image/webp")
+
+
+@app.route("/unique/counter.webp")
+def UniqueCount():
+    count, unique = GetAndUpdateUnique(request.remote_addr)
+
+    return redirect(url_for(counter.__name__, count=count, unique=unique))
 
 
 @app.route("/counter.webp")
 def CurrentCount():
+    count = GetAndUpdateCount()
+
+    return redirect(url_for(counter.__name__, count=count))
+
+
+@app.route("/unique/ticker.webp")
+def UniqueTicker():
     count, unique = GetAndUpdateUnique(request.remote_addr)
 
-    return redirect(f"/count/{count}.webp")
+    return redirect(url_for(ticker.__name__, count=count, unique=unique))
 
 
 @app.route("/ticker.webp")
 def CurrentTicker():
-    count, unique = GetAndUpdateUnique(request.remote_addr)
+    count = GetAndUpdateCount()
 
-    return redirect(f"/ticker/{unique}.webp")
+    return redirect(url_for(ticker.__name__, count=count))
 
 
 def GenerateAnimated(count: int) -> BytesIO:
@@ -101,12 +124,42 @@ def GenerateTicker(count: int) -> BytesIO:
     with Image.open("bg.png") as bg:
         drawing = ImageDraw.Draw(bg)
         drawing.text(
-            (0, 0), f"{count:08}", "red", ImageFont.load("font/seven-segment.pil")
+            (0, 0), f"{count:010}", "red", ImageFont.load("font/seven-segment.pil")
         )
         del drawing
 
         output = BytesIO()
         bg.save(output, "WEBP", lossless=True)
+        output.seek(0)
+
+        return output
+
+
+def GenerateTickerUnique(count: int, unique: int) -> BytesIO:
+    with Image.open("bg-unique.png") as bg:
+        uniqueBg = bg.copy()
+        uniqueDrawing = ImageDraw.Draw(uniqueBg)
+        uniqueDrawing.text(
+            (0, 0), f"CD{unique:08}", "red", ImageFont.load("font/seven-segment.pil")
+        )
+        del uniqueDrawing
+
+        drawing = ImageDraw.Draw(bg)
+        drawing.text(
+            (0, 0), f"AB{count:08}", "red", ImageFont.load("font/seven-segment.pil")
+        )
+        del drawing
+
+        output = BytesIO()
+        bg.save(
+            output,
+            "WEBP",
+            save_all=True,
+            append_images=[uniqueBg],
+            disposal=2,
+            duration=5000,
+            lossless=True,
+        )
         output.seek(0)
 
         return output
