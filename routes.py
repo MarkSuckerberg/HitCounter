@@ -1,4 +1,4 @@
-from flask import Flask, send_file, request, redirect, url_for
+from flask import Flask, send_file, request, redirect, url_for, render_template
 from PIL import Image, ImageDraw, ImageFont, ImageSequence
 from io import BytesIO
 from hitcount_file import HitCountBinary as HitCountFile
