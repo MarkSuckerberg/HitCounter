@@ -1,18 +1,18 @@
 from hashlib import blake2s as hash
-from io import BufferedRandom, TextIOWrapper
 import fcntl
 import json
 import pickle
 from shutil import copyfile
-from os import getenv
+from os import getenv, PathLike
+from io import BufferedRandom, TextIOWrapper
 
 
 class HitCountFile:
     count: int
     unique: int
-    file: BufferedRandom
+    file: BufferedRandom | TextIOWrapper
 
-    def __init__(self, fileName: str):
+    def __init__(self, fileName: str | bytes | PathLike):
         try:
             # If it doesn't exist, we know it's already empty
             self.file = open(fileName, "xb+")
@@ -113,6 +113,7 @@ class HitCountJson(HitCountFile):
             return True
         self.unique += 1
         self.visitors.add(visitorHash)
+        return False
 
     def GetVisitors(self):
         bytesVisitor = []
@@ -133,6 +134,7 @@ class HitCountJson(HitCountFile):
 
 class HitCountPickle(HitCountFile):
     visitors: set[bytes] = set()
+    file: BufferedRandom
 
     def PostInit(self):
         try:
@@ -154,6 +156,7 @@ class HitCountPickle(HitCountFile):
             return True
         self.unique += 1
         self.visitors.add(visitorHash)
+        return False
 
     def GetVisitors(self):
         return self.visitors
@@ -184,11 +187,13 @@ VISITORS_ARRAY_OFFSET = VISITOR_SIZE
 # Don't somehow accidentally overlap the data
 assert VISITORS_ARRAY_OFFSET > (VERSION_OFFSET + COUNT_SIZE)
 
-CURRENT_VERSION = 1
+VERSION = "v1.1.0"
+CURRENT_VERSION = int(VERSION[1:].split(".")[1])
 
 
 class HitCountBinary(HitCountFile):
     version: int
+    file: BufferedRandom
 
     def PostInit(self):
         # Read the initial values
@@ -240,7 +245,7 @@ class HitCountBinary(HitCountFile):
         if seek:
             self.file.seek(VISITORS_ARRAY_OFFSET)
 
-        visitors = set()
+        visitors: set[bytes] = set()
         while True:
             read = self.file.read(VISITOR_SIZE)
             if read == b"":
@@ -271,11 +276,13 @@ class HitCountBinary(HitCountFile):
 
 class HitCountBinarySimple(HitCountFile):
     """A simpler and faster version that just stores hits. Compatible with the normal version."""
-    unique: None
+
+    file: BufferedRandom
 
     def PostInit(self):
         # Read the initial values
         self.count = int.from_bytes(self.file.read(COUNT_SIZE))
+        self.unique = 0
 
     def PreClose(self):
         # Move to the start of the file

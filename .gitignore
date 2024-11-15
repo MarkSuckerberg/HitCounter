@@ -1,5 +1,11 @@
 __pycache__
-.mypy_cache
+.cache
+*.pyc
+.venv
+
+.coverage
+coverage.*
+htmlcov/
 
 data/*
 !data/README.md

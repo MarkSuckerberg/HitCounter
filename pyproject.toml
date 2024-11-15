@@ -1,0 +1,34 @@
+[project]
+name = "Hitcounter"
+description = "A simple hit counter for websites."
+readme = "README.md"
+dynamic = ["version"]
+authors = [{ name = "Mark Suckerberg", email = "mark@suckerberg.gay" }]
+dependencies = ["flask", "pillow", "python-dotenv"]
+
+[project.optional-dependencies]
+dev = ["mypy", "pil-font-maker", "pytest", "pytest-benchmark", "pytest-cov"]
+gunicorn = ["gunicorn"]
+uwsgi = ["uwsgi"]
+all = ["hitcounter[dev]", "hitcounter[gunicorn]", "hitcounter[uwsgi]"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.version]
+path = "hitcounter/hitcountfile.py"
+
+[tool.mypy]
+ignore_missing_imports = true
+strict_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_unreachable = true
+warn_return_any = true
+check_untyped_defs = true
+cache_dir = ".cache/mypy"
+
+[tool.pytest.ini_options]
+cache_dir = ".cache/pytest"
+addopts = "--ff --cov=hitcounter --cov-report=html --cov-report=term-missing --cov-fail-under=75 --benchmark-disable"

@@ -1,0 +1,42 @@
+name: Unit Tests
+on: [push, pull_request]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: 3.12
+          cache: "pip"
+
+      - name: Install dependencies
+        run: pip install -e .[all]
+
+      - name: Load Cache
+        uses: actions/cache@v4
+        with:
+          path: ./cache
+          key: ${{ runner.os }}-benchmark
+
+      - name: Lint MyPy
+        run: mypy hitcounter --cache-dir ./cache/mypy
+
+      - name: Run tests
+        run: |
+          pytest --benchmark-json data/output.json --cov-report=xml --benchmark-enable
+
+      - name: Store benchmark result
+        uses: benchmark-action/github-action-benchmark@v1
+        with:
+          tool: "pytest"
+          output-file-path: "data/output.json"
+          external-data-json-path: "./cache/output.json"
+          summary-always: true
+
+      - name: Upload to Codecov
+        uses: codecov/codecov-action@v4
