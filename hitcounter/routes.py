@@ -73,7 +73,7 @@ def UniqueCount(ext: FileType = "webp"):
     if ext not in get_args(FileType):
         return "Invalid file type", 400
 
-    count, unique = GetAndUpdateUnique(request.remote_addr or "")
+    count, unique = GetAndUpdateUnique(",".join(request.access_route) or "")
 
     return redirect(url_for(counter.__name__, count=count, unique=unique, ext=ext))
 
@@ -95,7 +95,7 @@ def UniqueTicker(ext: FileType = "webp"):
     if ext not in get_args(FileType):
         return "Invalid file type", 400
 
-    count, unique = GetAndUpdateUnique(request.remote_addr)
+    count, unique = GetAndUpdateUnique(",".join(request.access_route))
 
     return redirect(url_for(ticker.__name__, count=count, unique=unique, ext=ext))
 
